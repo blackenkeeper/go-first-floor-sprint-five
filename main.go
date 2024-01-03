@@ -33,7 +33,13 @@ func (t Training) distance() float64 {
 
 // meanSpeed возвращает среднюю скорость бега или ходьбы.
 func (t Training) meanSpeed() float64 {
-	meanSpeed := t.distance() / t.Duration.Hours()
+	timeOfTrainingInHours := t.Duration.Hours()
+
+	if timeOfTrainingInHours == 0 {
+		return 0
+	}
+
+	meanSpeed := t.distance() / timeOfTrainingInHours
 	return meanSpeed
 }
 
@@ -93,16 +99,15 @@ type Running struct {
 
 // Calories возввращает количество потраченных килокалория при беге.
 // Формула расчета:
-// ((18 * средняя_скорость_в_км/ч !!!+!!! 1.79) * вес_спортсмена_в_кг / м_в_км * время_тренировки_в_часах * мин_в_часе)
-// ((18 * средняя_скорость_в_км/ч !!!*!!! 1.79) * вес_спортсмена_в_кг / м_в_км * время_тренировки_в_часах * мин_в_часе) -
-// в предыдущем спринте в формуле было умножение, здесь - сложение. Какая фомула верная-то? Выделил '!!!' с двух сторон различия
+// ((18 * средняя_скорость_в_км/ч * 1.79) * вес_спортсмена_в_кг / м_в_км * время_тренировки_в_часах * мин_в_часе) -
 // Это переопределенный метод Calories() из Training.
 func (r Running) Calories() float64 {
 	runnigMeanSpeed := r.meanSpeed()
-	//runningTimeInMinutes := r.Duration.Hours() * MinInHours // интересно, а почему нельзя было использовать Duration.Minutes()?
+	runningTimeInMinutes := r.Duration.Hours() * MinInHours
 
-	spentCaloriesWhileRunning := (CaloriesMeanSpeedMultiplier*runnigMeanSpeed + CaloriesMeanSpeedShift) * r.Weight /
-		MInKm * r.Duration.Hours() * MinInHours // перенос выглядит некрасиво :(
+	runningMeanSpeedModifier := CaloriesMeanSpeedMultiplier*runnigMeanSpeed + CaloriesMeanSpeedShift
+
+	spentCaloriesWhileRunning := runningMeanSpeedModifier * r.Weight / MInKm * runningTimeInMinutes
 
 	return spentCaloriesWhileRunning
 
@@ -140,12 +145,15 @@ type Walking struct {
 // Это переопределенный метод Calories() из Training.
 func (w Walking) Calories() float64 {
 	walkingMeanSpeedInMetresPerSecond := w.meanSpeed() * KmHInMsec
-	doubledWalkingSpeed := math.Pow(walkingMeanSpeedInMetresPerSecond, 2)
 	heightInMetres := float64(w.Height / CmInM)
-	trainingTimeInMinutes := w.Duration.Hours() * MinInHours // всё-таки не понимаю, почему нельзя было через Duration.Minutes()?
+	trainingTimeInMinutes := w.Duration.Hours() * MinInHours
 
-	spentCaloriesWhileWalking := (CaloriesWeightMultiplier*w.Weight + (doubledWalkingSpeed/heightInMetres)*
-		CaloriesSpeedHeightMultiplier*w.Weight) * trainingTimeInMinutes
+	firstWeightModifier := CaloriesWeightMultiplier * w.Weight
+	secondWeightModifier := CaloriesSpeedHeightMultiplier * w.Weight
+
+	walkingSpeedModifier := math.Pow(walkingMeanSpeedInMetresPerSecond, 2) / heightInMetres
+
+	spentCaloriesWhileWalking := (firstWeightModifier + walkingSpeedModifier*secondWeightModifier) * trainingTimeInMinutes
 
 	return spentCaloriesWhileWalking
 }
@@ -178,17 +186,23 @@ type Swimming struct {
 
 // meanSpeed возвращает среднюю скорость при плавании.
 // Формула расчета:
-// длина_бассейна * количество_пересечений / м_в_км / продолжительность_тренировки - на web-странице с заданием указаны ед.изм., а тут нет
-// Это переопределенный метод Calories() из Training. // Скопировали текст, видимо. Тут явно не Calories() переопределён)
+// длина_бассейна * количество_пересечений / м_в_км / продолжительность_тренировки_в_часах
+// Это переопределенный метод Calories() из Training.
 func (s Swimming) meanSpeed() float64 {
-	meanSpeed := float64(s.LengthPool) * float64(s.CountPool) / MInKm / s.Duration.Hours()
+	timeOfTrainingInHours := s.Duration.Hours()
+
+	if timeOfTrainingInHours == 0 {
+		return 0
+	}
+
+	meanSpeed := float64(s.LengthPool) * float64(s.CountPool) / MInKm / timeOfTrainingInHours
 
 	return meanSpeed
 }
 
 // Calories возвращает количество калорий, потраченных при плавании.
 // Формула расчета:
-// (средняя_скорость_в_км/ч + 1.1) * 2 * вес_спортсмена_в_кг * время_тренеровки_в_часах - переписал фомулу, изначально была для meanSpeed()
+// (средняя_скорость_в_км/ч + 1.1) * 2 * вес_спортсмена_в_кг * время_тренеровки_в_часах
 // Это переопределенный метод Calories() из Training.
 func (s Swimming) Calories() float64 {
 	swimmingMeanSpeed := s.meanSpeed()
